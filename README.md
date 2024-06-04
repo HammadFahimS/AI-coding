@@ -3,5 +3,5 @@
 * Will add simple implementations of the most frequently used algorithms for AI.
 
 ## 1. AI Architecture
-* [Simple Convolutional Net with forward pass](https://website-name.com)
+* [Simple Convolutional Net with forward pass](https://github.com/HammadFahimS/AI-coding/blob/main/SimpleConvNet.ipynb)
 
