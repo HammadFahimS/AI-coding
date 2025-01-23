@@ -1,11 +1,14 @@
-Below is a step-by-step explanation of the DPO (Direct Preference Optimization) training code. The code is composed of three main parts:
+Below is a **step-by-step explanation** of the DPO (Direct Preference Optimization) training code. The code is composed of three main parts:
 
-A loss function (calculate_DPO_losss) that computes DPO’s objective.
-A helper function (get_log_prob) to extract token‐level log probabilities from a model’s outputs.
-A training loop (train) that orchestrates forward passes on both model and ref_model, computes the DPO loss, and updates the model parameters.
-1. The calculate_DPO_losss Function
-python
-Copy
+1. A **loss function** (`calculate_DPO_losss`) that computes DPO’s objective.  
+2. A helper function (`get_log_prob`) to extract token‐level log probabilities from a model’s outputs.  
+3. A **training loop** (`train`) that orchestrates forward passes on both **model** and **ref_model**, computes the DPO loss, and updates the model parameters.
+
+---
+
+## 1. The `calculate_DPO_losss` Function
+
+```python
 def calculate_DPO_losss(model_prefered_logprob, model_disprefered_logprob,
                         ref_prefered_logprob, ref_disprefered_logprob,
                         beta=0.5):
@@ -18,43 +21,51 @@ def calculate_DPO_losss(model_prefered_logprob, model_disprefered_logprob,
     loss = -F.logsigmoid(beta * (prefered_relative_logprob - disprefered_relative_logprob)).mean(dim=-1)
 
     return loss, prefered_relative_logprob.mean(dim=-1), disprefered_relative_logprob.mean(dim=-1), reward_accuracies, reward_margins
-Relative Log Probabilities
+```
 
-prefered_relative_logprob = model_prefered_logprob - ref_prefered_logprob
-disprefered_relative_logprob = model_disprefered_logprob - ref_disprefered_logprob
-These lines compute how much more (or less) likely the model is making the preferred or dispreferred response compared to the reference model.
-Accuracy & Margin
+1. **Relative Log Probabilities**  
+   - `prefered_relative_logprob = model_prefered_logprob - ref_prefered_logprob`  
+   - `disprefered_relative_logprob = model_disprefered_logprob - ref_disprefered_logprob`  
+   These lines compute how much more (or less) likely the model is making the **preferred** or **dispreferred** response **compared to** the reference model.
 
-reward_accuracies: The fraction of examples for which the preferred response’s relative log probability is higher than the dispreferred one.
-reward_margins: The mean difference between the preferred and dispreferred relative log probabilities, indicating how large the gap is.
-DPO Loss
+2. **Accuracy & Margin**  
+   - `reward_accuracies`: The fraction of examples for which the preferred response’s relative log probability is higher than the dispreferred one.  
+   - `reward_margins`: The mean difference between the preferred and dispreferred relative log probabilities, indicating how large the gap is.
 
-loss = -F.logsigmoid(...) with beta * (prefered_relative_logprob - disprefered_relative_logprob).
-The key idea is to push the model to rank the preferred sequence higher than the dispreferred one in relative terms.
-beta is a hyperparameter controlling how strongly we enforce that gap.
-Return Values
+3. **DPO Loss**  
+   - `loss = -F.logsigmoid(...)` with `beta * (prefered_relative_logprob - disprefered_relative_logprob)`.  
+   - The key idea is to push the model to rank the preferred sequence higher than the dispreferred one in **relative** terms.  
+   - `beta` is a hyperparameter controlling how strongly we enforce that gap.
 
-Returns the scalar loss, plus extra metrics (prefered_relative_logprob, disprefered_relative_logprob, reward_accuracies, reward_margins) for logging or analysis.
-2. The get_log_prob Function
-python
-Copy
+4. **Return Values**  
+   - Returns the scalar `loss`, plus extra metrics (`prefered_relative_logprob`, `disprefered_relative_logprob`, `reward_accuracies`, `reward_margins`) for logging or analysis.
+
+---
+
+## 2. The `get_log_prob` Function
+
+```python
 def get_log_prob(logits, labels):
     log_probs = F.log_softmax(logits, dim=-1)
     return torch.gather(log_probs, dim=-1, index=labels.unsqueeze(-1)).squeeze(-1).mean(-1)
-Log Softmax
+```
 
-Converts logits to log probabilities (log_probs = F.log_softmax(logits, dim=-1)).
-Gather Token Log Probs
+1. **Log Softmax**  
+   - Converts logits to log probabilities (`log_probs = F.log_softmax(logits, dim=-1)`).
 
-torch.gather(log_probs, dim=-1, index=labels.unsqueeze(-1)) picks out the log probability of the true label for each token.
-squeeze(-1) removes the extra dimension.
-Mean Over Sequence
+2. **Gather Token Log Probs**  
+   - `torch.gather(log_probs, dim=-1, index=labels.unsqueeze(-1))` picks out the log probability of the **true** label for each token.  
+   - `squeeze(-1)` removes the extra dimension.
 
-.mean(-1) computes the average log probability across the sequence.
-Returns a single scalar per batch element, describing the model’s overall likelihood of the given sequence.
-3. The train Function
-python
-Copy
+3. **Mean Over Sequence**  
+   - `.mean(-1)` computes the average log probability across the sequence.  
+   - Returns a single scalar per batch element, describing the model’s overall likelihood of the given sequence.
+
+---
+
+## 3. The `train` Function
+
+```python
 def train(model, ref_model, tokenizer, optimizer, train_dataloader, epochs=1, beta=0.1):
     model.train()
     ref_model.eval()
@@ -110,28 +121,35 @@ def train(model, ref_model, tokenizer, optimizer, train_dataloader, epochs=1, be
                 "reward_accuracies": reward_accuracies,
                 "reward_margins": reward_margins
             })
-Breakdown
-Model vs. Reference Model
+```
 
-model is the trainable policy, set to .train().
-ref_model is a fixed baseline, set to .eval() so its parameters don’t change.
-Batch Fetching
+### Breakdown
 
-Each batch has concatenated input IDs and masks for prompt + preferred and prompt + dispreferred sequences.
-Forward Passes
+1. **Model vs. Reference Model**  
+   - `model` is the trainable policy, set to `.train()`.  
+   - `ref_model` is a fixed baseline, set to `.eval()` so its parameters don’t change.
 
-model_prefered_logprobs & model_disprefered_logprobs: model’s average log probability on chosen/rejected completions.
-ref_prefered_logprobs & ref_disprefered_logprobs: reference model’s average log probability on the same sequences.
-Computing the DPO Loss
+2. **Batch Fetching**  
+   - Each `batch` has concatenated input IDs and masks for **prompt + preferred** and **prompt + dispreferred** sequences.
 
-Use calculate_DPO_losss to compare the model’s relative log probabilities against the reference model, pushing chosen sequences above rejected ones.
-Update & Logging
+3. **Forward Passes**  
+   - **`model_prefered_logprobs`** & **`model_disprefered_logprobs`**: model’s average log probability on chosen/rejected completions.  
+   - **`ref_prefered_logprobs`** & **`ref_disprefered_logprobs`**: reference model’s average log probability on the same sequences.
 
-loss.backward() then optimizer.step() updates the trainable model parameters.
-wandb.log(...) records metrics for monitoring.
-Why This Setup?
-DPO (Direct Preference Optimization) aligns a model by comparing preferred vs. dispreferred responses and adjusting the model’s distribution to rank the chosen one higher relative to a reference model’s distribution.
-Reference Model: Provides a baseline probability; DPO focuses on the difference between model and reference probabilities rather than raw probabilities alone.
-Two Forward Passes: For each sample, we compute log probabilities for (prompt + chosen) and (prompt + dispreferred) for both model and ref_model.
-Sigmoid Loss: Encourages p_model(chosen) > p_model(rejected) in relative terms, modulated by beta.
-This training loop iterates over epochs, processing batches of examples, and gradually updates the model so that its preference ordering matches the human or system-provided “chosen” vs. “rejected” annotations.
+4. **Computing the DPO Loss**  
+   - Use `calculate_DPO_losss` to compare the model’s relative log probabilities against the reference model, pushing chosen sequences above rejected ones.
+
+5. **Update & Logging**  
+   - `loss.backward()` then `optimizer.step()` updates the trainable model parameters.  
+   - `wandb.log(...)` records metrics for monitoring.
+
+---
+
+### Why This Setup?
+
+- **DPO** (Direct Preference Optimization) aligns a model by comparing **preferred** vs. **dispreferred** responses and adjusting the model’s distribution to rank the chosen one higher *relative* to a reference model’s distribution.  
+- **Reference Model**: Provides a baseline probability; DPO focuses on the *difference* between model and reference probabilities rather than raw probabilities alone.  
+- **Two Forward Passes**: For each sample, we compute log probabilities for (prompt + chosen) and (prompt + dispreferred) for both **model** and **ref_model**.  
+- **Sigmoid Loss**: Encourages `p_model(chosen) > p_model(rejected)` in relative terms, modulated by `beta`.
+
+This training loop iterates over epochs, processing batches of examples, and gradually **updates** the model so that its preference ordering matches the human or system-provided “chosen” vs. “rejected” annotations.
